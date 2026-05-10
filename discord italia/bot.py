@@ -7,28 +7,28 @@ import json
 import asyncio
 from aiohttp import web, ClientSession
 
-# --- CONFIGURAZIONE VARIABILI AMBIENTALI ---
-# Su Render, dovrai impostare queste chiavi nella sezione Environment
+# --- 1. CONFIGURAZIONE VARIABILI ---
+# Legge i dati dalle "Environment Variables" di Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
-RENDER_URL = os.environ.get("RENDER_URL") # Es: https://tuo-bot.onrender.com
+RENDER_URL = os.environ.get("RENDER_URL")
 firebase_raw = os.environ.get("FIREBASE_JSON")
 
-# --- INIZIALIZZAZIONE FIREBASE ---
+# --- 2. INIZIALIZZAZIONE FIREBASE (Senza file .json) ---
 if firebase_raw:
     try:
         cred_dict = json.loads(firebase_raw)
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
-        print("🔥 [DATABASE] Firebase collegato con successo!")
+        print("🔥 [DATABASE] Firebase collegato correttamente!")
     except Exception as e:
-        print(f"❌ [ERRORE] Firebase JSON non valido: {e}")
+        print(f"❌ [ERRORE] JSON Firebase non valido: {e}")
 else:
-    print("⚠️ [ATTENZIONE] Variabile FIREBASE_JSON mancante!")
+    print("⚠️ [ATTENZIONE] Variabile FIREBASE_JSON non trovata su Render!")
 
-# --- TRUCCO ANTI-SLEEPING (WEB SERVER + SELF-PING) ---
+# --- 3. TRUCCO ANTI-SONNO (WEB SERVER + SELF-PING) ---
 async def home(request):
-    return web.Response(text="Scorpion Security Bot is Online! 🚀")
+    return web.Response(text="Scorpion Security is Active! 🦂")
 
 async def start_web_server():
     app = web.Application()
@@ -42,56 +42,56 @@ async def start_web_server():
 
 @tasks.loop(minutes=10)
 async def self_ping():
-    """Il bot chiama se stesso per non farsi spegnere da Render"""
+    """Manda un segnale a se stesso per non far spegnere Render"""
     if not RENDER_URL or "onrender.com" not in RENDER_URL:
         return
-    
     async with ClientSession() as session:
         try:
             async with session.get(RENDER_URL) as response:
                 if response.status == 200:
-                    print("💓 [SELF-PING] Bot svegliato con successo.")
+                    print("💓 [PING] Il bot si è dato la sveglia.")
         except Exception as e:
-            print(f"⚠️ [SELF-PING] Errore: {e}")
+            print(f"⚠️ [PING] Errore: {e}")
 
-# --- CLASSE BOT PRINCIPALE ---
+# --- 4. CLASSE BOT PRINCIPALE ---
 class ScorpionBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
-        # Prefisso per i comandi pubblici (come !controlla)
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Caricamento automatico dei COGS (Blacklist e Backup)
+        # Carica automaticamente tutti i file nella cartella /cogs
+        # Se hai messo la Root Directory su Render, './cogs' è corretto
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
                 try:
                     await self.load_extension(f'cogs.{filename[:-3]}')
-                    print(f"✅ Modulo caricato: {filename}")
+                    print(f"✅ Caricato modulo: {filename}")
                 except Exception as e:
                     print(f"❌ Errore caricamento {filename}: {e}")
         
-        # Avvia il loop anti-sonno
+        # Avvia il loop per restare online
         self_ping.start()
 
     async def on_ready(self):
         print(f"-----------------------------------")
         print(f"🦂 {self.user.name} ONLINE")
-        print(f"👑 Owner ID: {self.owner_id}")
+        print(f"👑 Creatore: {self.owner_id}")
         print(f"-----------------------------------")
-        # Sincronizza i comandi Slash (per /blacklist_user ecc.)
+        # Sincronizza i comandi slash (/)
         await self.tree.sync()
 
-# --- AVVIO ---
+# --- 5. ESECUZIONE ---
 async def main():
     bot = ScorpionBot()
     bot.owner_id = OWNER_ID
     
-    # Avvia web server e bot in parallelo
-    await asyncio.gather(
-        start_web_server(),
-        bot.start(TOKEN)
-    )
+    async with bot:
+        # Avvia contemporaneamente il server web e il bot
+        await asyncio.gather(
+            start_web_server(),
+            bot.start(TOKEN)
+        )
 
 if __name__ == "__main__":
     try:
