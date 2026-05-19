@@ -1,0 +1,54 @@
+import discord
+from discord.ext import commands, tasks
+import asyncio
+
+class BotPresence(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.change_status.start() # Avvia il ciclo automatico dello stato
+
+    def cog_unload(self):
+        self.change_status.cancel() # Ferma il ciclo se il cog viene ricaricato
+
+    @tasks.loop(seconds=20) # Cambia lo stato ogni 20 secondi per evitare i limiti di Discord
+    async def change_status(self):
+        await self.bot.wait_until_ready()
+        
+        # 1. Recupera il numero di server aggiornato in tempo reale
+        server_count = len(self.bot.guilds)
+        
+        # Gestione singolare/plurale (se è 1 server scrive "1 server", altrimenti "X server")
+        server_text = f"{server_count} server" if server_count != 1 else "1 server"
+
+        try:
+            # STATO 1: Sta guardando X server
+            await self.bot.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching, 
+                    name=server_text
+                ),
+                status=discord.Status.online
+            )
+            await asyncio.sleep(7) # Rimane su questo stato per 7 secondi
+
+            # STATO 2: Sta giocando a "Creato da Scorpion"
+            await self.bot.change_presence(
+                activity=discord.Game(name="Creato da Scorpion 🦂"),
+                status=discord.Status.online
+            )
+            await asyncio.sleep(7)
+
+            # STATO 3: Sta ascoltando "By Discord Italia"
+            await self.bot.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.listening, 
+                    name="by Discord Italia 🇮🇹"
+                ),
+                status=discord.Status.online
+            )
+            
+        except Exception as e:
+            print(f"[PRESENCE ERROR] Impossibile aggiornare lo stato: {e}")
+
+async def setup(bot):
+    await bot.add_cog(BotPresence(bot)
